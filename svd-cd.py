@@ -3,7 +3,6 @@
 
 import numpy as np
 import numpy.linalg as la
-import rec_lib.svd as svd
 import pickle
 from rec_lib.utils import *
 import os
@@ -24,21 +23,21 @@ def cal_sim_mat(train_file, featurenum):
         os.makedirs(dir_name)
 
     if os.path.exists(sim_mat_name):
-        return read_dict(sim_mat_name)
+        return read_obj(sim_mat_name)
 
-    mat, uid_no, no_uid, iid_no, no_iid = svd.read_table(train_file)
+    mat, uid_no, no_uid, iid_no, no_iid = read_checks_mat(train_file)
     
     # print(uid_no)
 
     if os.path.exists(U_name) and os.path.exists(S_name) and os.path.exists(V_name):
-        U = read_dict(U_name)
-        S = read_dict(S_name)
-        V = read_dict(V_name)
+        U = read_obj(U_name)
+        S = read_obj(S_name)
+        V = read_obj(V_name)
     else:
         U, S, V = la.svd(mat)    
-        write_dict(U_name,U)
-        write_dict(S_name,S)
-        write_dict(V_name,V)
+        write_obj(U_name,U)
+        write_obj(S_name,S)
+        write_obj(V_name,V)
 
     U = U[:,:featurenum]
     # V = V[:featurenum,:]
@@ -58,21 +57,19 @@ def cal_sim_mat(train_file, featurenum):
                 sim_mat[u2].append((u1,sim))
             else:
                 sim_mat[u2]=[(u1,sim)]
-    write_dict(sim_mat_name, sim_mat)
+    write_obj(sim_mat_name, sim_mat)
     return sim_mat
 
 def main_svd(train_file, test_file, featurenum, topns=[20], topks=[20]):
     nprs = []
     nres = []
     print('read_table')
-    table = read_table(train_file,uin=0,iin=4,timein=1,scorein=None)
-    test = read_table(test_file, uin=0,iin=4,timein=1,scorein=None)
+    table = read_checks_table(train_file,uin=0,iin=4,timein=1,scorein=None)
+    test = read_checks_table(test_file, uin=0,iin=4,timein=1,scorein=None)
     friends_dic = read_dic_set('Gowalla_edges.txt')
 
     dir_name = '-'.join(train_file.split('.')[:-1]) + '/'
     sim_fun_name = 'svd'
-    
-    import os
 
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
@@ -84,13 +81,13 @@ def main_svd(train_file, test_file, featurenum, topns=[20], topks=[20]):
         ex_rec_name = dir_name + '-'.join(['ex_rec', sim_fun_name, str(topn), train_file])
         if (os.path.exists(ex_rec_name)):
             print('read recommend result from file')
-            rec = read_dict(ex_rec_name)
+            rec = read_obj(ex_rec_name)
         else:
             print('recommend')
             rec = recommend(table, sim_metrics, topn)
-            write_dict(rec_name, rec)
+            write_obj(rec_name, rec)
             exclude_dup(table, rec)
-            write_dict(ex_rec_name, rec)
+            write_obj(ex_rec_name, rec)
 
         prs = []
         res = []
@@ -133,7 +130,7 @@ def recommend(op_table, sim_metrics, topn):
 if __name__ == '__main__':
     nprs, nres = main_svd(train_file='all-trainklnd-Gowalla_totalCheckins.txt',
         featurenum=100,
-        test_file='all-testklnd-Gowalla_totalCheckins.txt',
+        test_file='testklnd-Gowalla_totalCheckins.txt',
         topns=[5,10,15,20,25,30,100],
         topks=[5,10,15,20,25])
     print(nprs,nres)

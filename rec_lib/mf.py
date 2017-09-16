@@ -1,5 +1,5 @@
-
 from numpy import *
+
 
 def gradAscent(data, K):
     dataMat = mat(data)

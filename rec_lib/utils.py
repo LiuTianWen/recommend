@@ -1,29 +1,25 @@
 # -*- coding:utf-8 -*-  
-import math
+from datetime import datetime
+
 import numpy as np
 from numpy import *
-import matplotlib.pyplot as plt
-from random import random   
-import sys
-import functools
-from datetime import datetime
 import pickle
 
 
-# 进度条 
+# 进度条
 def view_bar(num, total):
-  rate = num / total
-  rate_num = int(rate * 100)
-  print(rate_num)
+    rate = num / total
+    rate_num = int(rate * 100)
+    print(rate_num)
 
 
 # 字典按照value排序
 def sort_dict(dic, reverse=True):
-    return sorted(dic.items(), key=lambda d:d[1], reverse = reverse)
+    return sorted(dic.items(), key=lambda d: d[1], reverse=reverse)
 
 
 # 读取评分表 user, item, score
-def read_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
+def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
     table = {}
     with open(filename) as f:
         for each in f:
@@ -39,16 +35,16 @@ def read_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
     return table
 
 
-# 读 字典
-def read_dict(filename):
-    with open(filename, 'rb') as f:
+# 读 文件
+def read_obj(filename, root=''):
+    with open(root + filename, 'rb') as f:
         return pickle.load(f)
 
 
-# 写字典
-def write_dict(filename, dic):
-    with open(filename, 'wb') as f:
-        pickle.dump(dic,f)
+# 写 文件
+def write_obj(filename, dic, root=''):
+    with open(root + filename, 'wb') as f:
+        pickle.dump(dic, f)
 
 
 # 读取列表归属字典（朋友集合等）
@@ -66,15 +62,24 @@ def read_dic_set(filename):
     return dic_f
 
 
+def dic_value_reg_one(obj):
+    if not isinstance(obj, dict):
+        raise RuntimeError('type error')
+    values = list(obj.values())
+    s = sum(values)
+    for k in obj.keys():
+        obj[k] = obj[k] / s
+
+
 # 推荐结果去重
 def exclude_dup(op_table, rec):
     for k in rec.keys():
-        old_items = set([i[0] for i in op_table.get(k,[])])
+        old_items = set([i[0] for i in op_table.get(k, [])])
         rec[k] = [e for e in rec[k] if not old_items.__contains__(e[0])]
 
 
 # 读取评分表 user, item, score
-def read_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
+def read_checks_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
     uid_no = {}
     iid_no = {}
     no_uid = {}
@@ -109,3 +114,9 @@ def read_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
             mat[u][it[0]] = it[1]
 
     return mat, uid_no, no_uid, iid_no, no_iid
+
+
+if __name__ == '__main__':
+    a = {1: 2, 3: 6}
+    dic_value_reg_one(a)
+    print(a)
