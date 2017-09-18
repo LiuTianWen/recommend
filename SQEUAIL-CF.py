@@ -101,7 +101,7 @@ def cf_main(train_file, test_file, topns=None, topks=None):
 if __name__ == '__main__':
     nprs, nres = cf_main('trainklnd-Gowalla_totalCheckins.txt',
                          'testklnd-Gowalla_totalCheckins.txt',
-                         topns=[5, 10, 15, 20, 25, 30],
-                         topks=[5, 10, 15, 20, 25])
+                         topns=[5, 10, 15, 20, 25, 30, 100, 200, 300],
+                         topks=[1, 2, 3, 5, 7, 10, 15, 20])
     pprint(nprs)
     pprint(nres)
