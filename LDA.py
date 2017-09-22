@@ -2,7 +2,8 @@
 import os
 from math import log
 
-from rec_lib.utils import read_checks_table, dic_value_reg_one, read_obj, write_obj, sort_dict, read_dic_set, exclude_dup
+from rec_lib.utils import read_checks_table, dic_value_reg_one, read_obj, write_obj, sort_dict, read_dic_set, \
+    exclude_dup, out_json_to_file
 from rec_lib.similar import cosine_for_dic, cal_sim_mat
 from rec_lib.evaluate import *
 from random import random
@@ -236,6 +237,9 @@ def cf_main(train_file, test_file, topns=None, topks=None):
         # print('y2=',res)
         nprs.append(prs.copy())
         nres.append(res.copy())
+    out_json_to_file(dir_name + 'nprs.txt', nprs)
+    out_json_to_file(dir_name + 'nres.txt', nres)
+
     return nprs, nres
 
 

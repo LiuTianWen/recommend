@@ -19,7 +19,7 @@ def sort_dict(dic, reverse=True):
 
 
 # 读取评分表 user, item, score
-def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
+def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1, time_format='%Y-%m-%dT%H:%M:%SZ'):
     table = {}
     with open(filename) as f:
         for each in f:
@@ -27,7 +27,7 @@ def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, time
             u = elements[uin]
             i = elements[iin]
             score = 1 if scorein is None else elements[scorein]
-            _time = None if timein is None else datetime.strptime(elements[timein], '%Y-%m-%dT%H:%M:%SZ')
+            _time = None if timein is None else datetime.strptime(elements[timein], time_format)
             if table.get(u) is not None:
                 table[u].append((i, score, _time))
             else:
@@ -48,11 +48,11 @@ def write_obj(filename, dic, root=''):
 
 
 # 读取列表归属字典（朋友集合等）
-def read_dic_set(filename):
+def read_dic_set(filename, split_tag='\t'):
     dic_f = {}
     with open(filename) as f:
         for each in f:
-            es = each.strip().split('\t')
+            es = each.strip().split(split_tag)
             u1 = es[0]
             u2 = es[1]
             if dic_f.__contains__(u1):
@@ -62,13 +62,30 @@ def read_dic_set(filename):
     return dic_f
 
 
+# 读取 朋友字典，信任度赋值为1
+def read_trust_dic(filename):
+    dic_f = {}
+    with open(filename) as f:
+        for each in f:
+            es = each.strip().split('\t')
+            u1 = es[0]
+            u2 = es[1]
+            if dic_f.__contains__(u1):
+                dic_f[u1][u2] = 1
+            else:
+                dic_f[u1] = {u2:1}
+    return dic_f
+
+
 def dic_value_reg_one(obj):
     if not isinstance(obj, dict):
+        print(obj)
         raise RuntimeError('type error')
     values = list(obj.values())
     s = sum(values)
-    for k in obj.keys():
-        obj[k] = obj[k] / s
+    if s > 0:
+        for k in obj.keys():
+            obj[k] = obj[k] / s
 
 
 # 推荐结果去重
@@ -79,7 +96,7 @@ def exclude_dup(op_table, rec):
 
 
 # 读取评分表 user, item, score
-def read_checks_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1):
+def read_checks_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1, time_format='%Y-%m-%dT%H:%M:%SZ'):
     uid_no = {}
     iid_no = {}
     no_uid = {}
@@ -93,7 +110,7 @@ def read_checks_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein
             u = elements[uin]
             i = elements[iin]
             score = 1 if scorein is None else elements[scorein]
-            _time = None if timein is None else datetime.strptime(elements[timein], '%Y-%m-%dT%H:%M:%SZ')
+            _time = None if timein is None else datetime.strptime(elements[timein], time_format)
             if not uid_no.__contains__(u):
                 uid_no[u] = uid
                 no_uid[uid] = u
@@ -116,7 +133,12 @@ def read_checks_mat(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein
     return mat, uid_no, no_uid, iid_no, no_iid
 
 
+def out_json_to_file(filename, obj):
+    import json
+    with open(filename, 'w') as f:
+        f.write(json.dumps(obj))
+
 if __name__ == '__main__':
     a = {1: 2, 3: 6}
-    dic_value_reg_one(a)
-    print(a)
+    out_json_to_file('test.txt', a)
+    # print(a)

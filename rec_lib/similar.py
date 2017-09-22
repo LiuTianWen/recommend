@@ -1,55 +1,36 @@
 import numpy as np
+import time
 from numpy import *
 from numpy import array
+from collections import Counter
+from rec_lib.utils import read_obj, dic_value_reg_one, sort_dict
+import gc
 
 
 class CosineSimilar:
-    name = 'cosine'
+    name = 'cosine_1'
 
-    def __init__(self, table):
+    def __init__(self, table, limit=1):
         self.table = table
+        self.limit = limit
 
     def __call__(self, u1, u2):
         x = self.table[u1]
         y = self.table[u2]
-        mx = {e[0] for e in x}
-        my = {e[0] for e in y}
-        downx = len(mx)
-        downy = len(my)
-        up = sum([1 for k in set(mx) & set(my)])
+        mx = Counter([e[0] for e in x])
+        my = Counter([e[0] for e in y])
+        if self.limit is not None:
+            for k, v in mx.items():
+                if v > self.limit:
+                    mx[k] = self.limit
+            for k, v in my.items():
+                if v > self.limit:
+                    my[k] = self.limit
+        downx = sum([v*v for k, v in mx.items()])
+        downy = sum([v*v for k, v in my.items()])
+        up = sum([mx[k] * my[k] for k in set(mx.keys()) & set(my.keys())])
         # print(up)
         return math.sqrt(up * up / (downx * downy))
-
-
-# how many times u2 followed u1
-# delta: time_limit
-class SequenceScore:
-    def __init__(self, table, delta=24 * 60 * 60):
-        self.table = table
-        self.delta = delta
-
-    @property
-    def name(self):
-        return 'sq_score' + str(self.delta)
-
-    def __call__(self, u1, u2):
-        x = self.table[u1]
-        y = self.table[u2]
-        mx = {}
-        for e in x:
-            if not mx.__contains__(e[0]):
-                mx[e[0]] = e[2]
-        my = {}
-        for e in y:
-            if not my.__contains__(e[0]):
-                my[e[0]] = [e[2], e[1]]
-            else:
-                my[e[0]][1] += e[1]
-        up = 0
-        for k, v in my.items():
-            if mx.get(k) and v[0].__ge__(mx[k]) and 0 <= ((v[0] - mx[k]).seconds) < self.delta:
-                up += 1
-        return up
 
 
 class SocialSimilar:
@@ -71,8 +52,8 @@ class SocialAndCosineMixSimilar:
     name = 'soc_loc'
 
     def __init__(self, friends_dic, table, rate=0.5):
-        self.friend_similar = social_similar(friends_dic)
-        self.cosine_similar = cosine_similar(table)
+        self.friend_similar = SocialSimilar(friends_dic)
+        self.cosine_similar = CosineSimilar(table)
         self.rate = rate
 
     def __call__(self, u1, u2):
@@ -80,44 +61,6 @@ class SocialAndCosineMixSimilar:
         cs = self.cosine_similar(u1, u2)
         return self.rate * fs + (1 - self.rate) * cs
 
-
-class SequenceSimilar:
-    name = 'sqs'
-
-    def __init__(self, table, friends_dic, similar_fun):
-        self.friends_dic = friends_dic
-        count = 0
-        ids = list(table.keys())
-        total = len(ids) * len(ids)
-        l = len(ids)
-        print(l)
-        TM = {}
-        for u1 in ids:
-            if not TM.__contains__(u1):
-                TM[u1] = []
-            for u2 in ids:
-                if u1 == u2:
-                    continue
-                else:
-                    count += 1
-                    if count % 10000 == 0:
-                        print(count / total)
-                    TM[u1].append((u2, similar_fun(u2, u1)))
-
-            sum_score = sum([e[1] for e in TM[u1]])
-            if sum_score > 0:
-                TM[u1] = [[e[0], e[1] / sum_score] for e in TM[u1]]
-        self.TM = TM
-
-    def __call__(self, u1, u2):
-        # noinspection PyBroadException
-        try:
-            if self.friends_dic[u1].__contains__(u2):
-                return self.TM[u1][u2]
-            else:
-                return 0
-        except:
-            return 0
 
 
 # for array
@@ -145,7 +88,36 @@ def cosine_for_dic(dx, dy):
     return up / math.sqrt(down1 * down2)
 
 
-def cal_sim_mat(table, similar_fun):
+# async
+def cal_sim_mat_for_async(worknum, user_queue, users, similar_fun, reg_one=True, sort_change=True):
+    sim_mat = {}
+    print('run thread' + str(worknum))
+    count = 0
+    while user_queue:
+        count += 1
+
+        user = user_queue.pop()
+
+        print(len(user_queue), worknum)
+        if user is not None:
+            sim_mat[user] = {}
+            for u in users:
+                if u == user:
+                    continue
+                s = similar_fun(user, u)
+                if s > 0:
+                    sim_mat[user][u] = s
+            if reg_one:
+                dic_value_reg_one(sim_mat[user])
+            if sort_change:
+                sim_mat[user] = sort_dict(sim_mat[user])
+            # if count % 20 == 0:
+            #     gc.collect()
+    return sim_mat
+
+
+# static fun
+def cal_sim_mat(table, similar_fun, reg_one=True, sort_change=True):
     count = 0
     ids = list(table.keys())
     total = len(ids) * len(ids)
@@ -154,7 +126,7 @@ def cal_sim_mat(table, similar_fun):
     TM = {}
     for u1 in ids:
         if not TM.__contains__(u1):
-            TM[u1] = []
+            TM[u1] = {}
         for u2 in ids:
             if u1 == u2:
                 continue
@@ -162,13 +134,16 @@ def cal_sim_mat(table, similar_fun):
                 count += 1
                 if count % 10000 == 0:
                     print(count, total)
-                TM[u1].append((u2, similar_fun(u2, u1)))
+                s = similar_fun(u2, u1)
+                if s > 0 :
+                    TM[u1][u2] = s
+        if TM[u1] is None:
+            print(u1, TM[u1])
+        if reg_one:
+            dic_value_reg_one(TM[u1])
 
-        sum_score = sum([e[1] for e in TM[u1]])
-        if sum_score > 0:
-            TM[u1] = [[e[0], e[1] / sum_score] for e in TM[u1]]
-
-    TM = {k: sorted(v, key=lambda d: d[1], reverse=True) for k, v in TM.items()}
+    if sort_change:
+        TM = {k: sort_dict(v) for k, v in TM.items()}
 
     return TM
 

@@ -2,3 +2,4 @@ mid_data/*
 *.txt
 *.pyc
 .idea/*
+*.csv
