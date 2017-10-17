@@ -1,4 +1,5 @@
-# -*- coding:utf-8 -*-  
+# -*- coding:utf-8 -*-
+import multiprocessing
 from datetime import datetime
 
 import numpy as np
@@ -19,19 +20,27 @@ def sort_dict(dic, reverse=True):
 
 
 # 读取评分表 user, item, score
-def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1, time_format='%Y-%m-%dT%H:%M:%SZ'):
+def read_checks_table(filename, split_sig='\t', uin=0, iin=4, scorein=None, timein=1, time_format='%Y-%m-%dT%H:%M:%SZ', lain=None, loin=None):
     table = {}
     with open(filename) as f:
         for each in f:
-            elements = each.strip().split(split_sig)
-            u = elements[uin]
-            i = elements[iin]
-            score = 1 if scorein is None else elements[scorein]
-            _time = None if timein is None else datetime.strptime(elements[timein], time_format)
-            if table.get(u) is not None:
-                table[u].append((i, score, _time))
-            else:
-                table[u] = [(i, score, _time)]
+            try:
+                elements = each.strip().split(split_sig)
+                u = elements[uin]
+                i = elements[iin]
+                score = 1 if scorein is None else elements[scorein]
+                _time = None if timein is None else datetime.strptime(elements[timein], time_format)
+                la = None if lain is None else float(elements[lain])
+                lo = None if loin is None else float(elements[loin])
+                if table.get(u) is not None:
+                    table[u].append((i, score, _time, la, lo))
+                else:
+                    table[u] = [(i, score, _time, la, lo)]
+            except Exception as e:
+                print(split_sig)
+                print(elements)
+                raise e
+
     return table
 
 
@@ -43,6 +52,7 @@ def read_obj(filename, root=''):
 
 # 写 文件
 def write_obj(filename, dic, root=''):
+    print('write obj')
     with open(root + filename, 'wb') as f:
         pickle.dump(dic, f)
 
@@ -50,15 +60,19 @@ def write_obj(filename, dic, root=''):
 # 读取列表归属字典（朋友集合等）
 def read_dic_set(filename, split_tag='\t'):
     dic_f = {}
+
     with open(filename) as f:
         for each in f:
             es = each.strip().split(split_tag)
             u1 = es[0]
             u2 = es[1]
+            if u1 == 'user1':
+                continue
             if dic_f.__contains__(u1):
                 dic_f[u1].add(u2)
             else:
                 dic_f[u1] = {u2}
+
     return dic_f
 
 
@@ -82,8 +96,8 @@ def dic_value_reg_one(obj):
         print(obj)
         raise RuntimeError('type error')
     values = list(obj.values())
-    s = sum(values)
-    if s > 0:
+    if values:
+        s = max(values)
         for k in obj.keys():
             obj[k] = obj[k] / s
 
@@ -138,7 +152,19 @@ def out_json_to_file(filename, obj):
     with open(filename, 'w') as f:
         f.write(json.dumps(obj))
 
+
+def read_center(filename, split_sig=',', oin=0, lain=1, loin=2):
+    table = {}
+    with open(filename) as f:
+        for each in f:
+            elements = each.strip().split(split_sig)
+            o = elements[oin]
+            la = float(elements[lain])
+            lo = float(elements[loin])
+            table[0] = [la, lo]
+    return table
+
+
+
 if __name__ == '__main__':
-    a = {1: 2, 3: 6}
-    out_json_to_file('test.txt', a)
-    # print(a)
+    pass

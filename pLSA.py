@@ -2,6 +2,7 @@
 from datetime import datetime
 import os
 from math import log
+import numpy as np
 
 from rec_lib.heap import ZPriorityQ, KVTtem
 from rec_lib.utils import read_checks_table, dic_value_reg_one, read_obj, write_obj, sort_dict, read_dic_set, \
@@ -19,12 +20,14 @@ class MyLDA:
         self.topic_num = topic_num
         self.checks = read_checks_table(train_filename, split_sig=split_sig, time_format=time_format, uin=uin, iin=iin, timein=timein)
 
-        dir_name = 'mid_data/' + '-'.join(train_filename.split('.')[:-1]) + '/lda' + str(topic_num) + 't/'
+        dir_name = 'mid_data/' + '-'.join(train_filename.split('.')[:-1]) + '/plsa' + str(topic_num) + 't/'
         u_in_z_filename = dir_name + 'pr_u_in_z.txt'
         i_in_z_filename = dir_name + 'pr_i_in_z.txt'
         z_filename = dir_name + 'pz.txt'
         pr_filename = dir_name + 'pr.txt'
         z_in_u_filename = dir_name + 'pr_z_in_u.txt'
+        user_list_file = dir_name + 'users'
+        items_list_file = dir_name + 'items'
 
         if not os.path.exists(dir_name):
             os.mkdir(dir_name)
@@ -57,36 +60,48 @@ class MyLDA:
         users = set()
         items = set()
         u_i_pairs = set()
+        checks = np.zeros((len(users), len(items)))
         for u, u_checks in checks.items():
             users.add(u)
             for check in u_checks:
                 i = check[0]
-                u_i_pair = (u, i)
                 items.add(i)
+
+        users = list(users)
+        items = list(items)
+        index_users = {}
+        index_items = {}
+        for i in range(users):
+            index_users[users[i]] = i
+        for i in range(items):
+            index_items[items[i]] = i
+
+        for u, u_checks in checks.items():
+            for check in u_checks:
+                i = check[0]
+                u_i_pair = (index_users[u], index_items[i])
                 u_i_pairs.add(u_i_pair)
 
         # 初始化参数 随机数
-        pr_u_in_z = {}
-        pr_i_in_z = {}
-        pz = {}
+        pr_u_in_z = np.zeros(topic_num, len(users))
+        pr_i_in_z = np.zeros(topic_num, len(items))
+        pz = np.zeros((topic_num))
         pr = {}
         for z in range(topic_num):
-            pr_u_in_z[z] = {}
-            pr_i_in_z[z] = {}
             pz[z] = random()
-            for item in items:
-                pr_i_in_z[z][item] = random()
-            for user in users:
-                pr_u_in_z[z][user] = random()
-            dic_value_reg_one(pr_u_in_z[z])
-            dic_value_reg_one(pr_i_in_z[z])
-        dic_value_reg_one(pz)
+            for i in range(len(items)):
+                pr_i_in_z[z][i] = random()
+            for u in range(len(users)):
+                pr_u_in_z[z][u] = random()
+            pr_u_in_z[z] /= pr_u_in_z[z].sum()
+            pr_i_in_z[z] /= pr_i_in_z[z].sum()
+        pz /= pz.sum()
         for pair in u_i_pairs:
-            pr[pair] = {}
+            pr[pair] = np.zeros(shape=topic_num)
             for z in range(topic_num):
                 pr[pair][z] = random()
-            dic_value_reg_one(pr[pair])
-        return pr_u_in_z, pr_i_in_z, pz, pr
+            pr[pair] /= pr[pair].sum()
+        return pr_u_in_z, pr_i_in_z, pz, pr, index_users, index_items
 
     @staticmethod
     def e_step(pr_u_in_z, pr_i_in_z, pz, pr):

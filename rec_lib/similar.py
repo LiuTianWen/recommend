@@ -32,36 +32,115 @@ class CosineSimilar:
         # print(up)
         return math.sqrt(up * up / (downx * downy))
 
+class JaccardSimilar:
+    name = 'Jaccard'
+
+    def __init__(self, table, limit=1):
+        self.table = table
+        self.limit = limit
+
+    def __call__(self, u1, u2):
+        x = self.table[u1]
+        y = self.table[u2]
+        mx = set([e[0] for e in x])
+        my = set([e[0] for e in y])
+        up = len(mx & my)
+        down = len(mx | my)
+        return up/down
+
 
 class SocialSimilar:
-    name = 'edge'
 
-    def __init__(self, friends_dic):
+    @property
+    def name(self):
+        return 'soc' + str(self.default_value)
+
+    def __init__(self, friends_dic, default_value=0.5): # 目前来看，这个0.5效果最好
         self.friends_dic = friends_dic
+        self.default_value = default_value
 
     def __call__(self, u1, u2):
         up = len(set(self.friends_dic.get(u1, set())) & self.friends_dic.get(u2, set()))
-        down = len(self.friends_dic.get(u1, set()))
-        if down:
-            return up / down
+        down = len(self.friends_dic.get(u1, set()) | self.friends_dic.get(u2, set()))
+        if self.friends_dic.get(u1, set()).__contains__(u2):
+            default_value = self.default_value
         else:
-            return 0
+            default_value = 0
+        if down:
+            return (1 - self.default_value) * (up / down) + default_value
+        else:
+            return default_value
 
 
-class SocialAndCosineMixSimilar:
-    name = 'soc_loc'
+class SocialGroupSimilar:
 
-    def __init__(self, friends_dic, table, rate=0.5):
-        self.friend_similar = SocialSimilar(friends_dic)
-        self.cosine_similar = CosineSimilar(table)
-        self.rate = rate
+    @property
+    def name(self):
+        return 'soc-group'+str(self.depth)
+
+    def __init__(self, friend_dic, depth=2): # 目前来看，这个0.5效果最好
+        self.friend_dic = friend_dic
+        self.depth = depth
+        self.friends_dic_in_n = self.extense_friends()
+        self.sim_mat = {}
+        # self.cal_sim_m()
+
+    def extense_friends(self):
+        print('calulate group friend')
+        nfd = {}
+        if self.depth == 1:
+            return self.friend_dic
+        for u in self.friend_dic.keys():
+            # print(u)
+            f = self.friend_dic.get(u, set()).copy()
+            f.add(u)
+            t = f.copy()
+            for i in range(1, self.depth):
+                nt = set()
+                for e in t:
+                    nt.update(self.friend_dic.get(e, set()))
+                t = nt - f
+                f.update(nt)
+            f.remove(u)
+            nfd[u] = {int(e) for e in f}
+        return nfd
+
+    def cal_sim_m(self):
+        for u1 in self.friend_dic.keys():
+            for u2 in self.friend_dic.keys():
+                if u1 == u2 or self.sim_mat.__contains__(u1) and self.sim_mat[u1].__contains__(u2):
+                    continue
+                if not self.sim_mat.__contains__(u1):
+                    self.sim_mat[u1] = {}
+                if not self.sim_mat.__contains__(u2):
+                    self.sim_mat[u2] = {}
+                up = self.friends_dic_in_n.get(u1, set()) & self.friends_dic_in_n.get(u2, set())
+                down = self.friends_dic_in_n.get(u1, set()) | self.friends_dic_in_n.get(u2, set())
+                self.sim_mat[u1][u2] = len(up)/len(down)
+                self.sim_mat[u2][u1] = len(up)/len(down)
 
     def __call__(self, u1, u2):
-        fs = self.friend_similar(u1, u2)
-        cs = self.cosine_similar(u1, u2)
-        return self.rate * fs + (1 - self.rate) * cs
+        try:
+            if self.depth == 0:
+                return 1 if self.friend_dic.get(u1, set()).__contains__(u2) else 0
 
+            if not self.sim_mat.__contains__(u1) or not self.sim_mat[u1].__contains__(u2):
+                if not self.sim_mat.__contains__(u1):
+                    self.sim_mat[u1] = {}
+                if not self.sim_mat.__contains__(u2):
+                    self.sim_mat[u2] = {}
+                up = len(self.friends_dic_in_n.get(u1, set()) & self.friends_dic_in_n.get(u2, set()))
+                down = len(self.friends_dic_in_n.get(u1, set()) | self.friends_dic_in_n.get(u2, set()))
+                if down == 0:
+                    down == 1
+                self.sim_mat[u1][u2] = up / down
+                self.sim_mat[u2][u1] = up / down
 
+            return self.sim_mat[u1][u2]
+        except:
+            return 0
+
+    # def
 
 # for array
 def cosine(A, B):
@@ -95,9 +174,7 @@ def cal_sim_mat_for_async(worknum, user_queue, users, similar_fun, reg_one=True,
     count = 0
     while user_queue:
         count += 1
-
         user = user_queue.pop()
-
         print(len(user_queue), worknum)
         if user is not None:
             sim_mat[user] = {}
@@ -132,9 +209,9 @@ def cal_sim_mat(table, similar_fun, reg_one=True, sort_change=True):
                 continue
             else:
                 count += 1
-                if count % 10000 == 0:
-                    print(count, total)
-                s = similar_fun(u2, u1)
+                # if count % 10000 == 0:
+                #     print(count, total)
+                s = similar_fun(u1, u2)
                 if s > 0 :
                     TM[u1][u2] = s
         if TM[u1] is None:

@@ -3,22 +3,14 @@ from time import sleep
 
 from rec_lib.evaluate import *
 from rec_lib.similar import *
-from rec_lib.time_inf import SequenceScore
-from rec_lib.trust import TrustCalculator
+from rec_lib.time_inf import SequenceScore, SocialSequenceScore
+from rec_lib.trust import KatzCalculator
 from rec_lib.utils import *
 import os
 from pprint import pprint
 import multiprocessing
 
 
-# 相似度矩阵，
-# {
-#  u1:[(u2, s12), (u3, s13)}, 
-#  u2:[(u1, s21), (u3, s23],
-#  u3:[(u1, s31), (u2, s32)]
-# }
-# topn 邻居数
-# recn 推荐数量
 def recommend(op_table, sim_metrics, topn=None):
     rec = {}
     for u in sim_metrics:
@@ -32,7 +24,7 @@ def recommend(op_table, sim_metrics, topn=None):
                 break
             if topn is not None and count >= topn:
                 break
-            item_set = {item: score for (item, score, time) in op_table[uss[0]]}
+            item_set = {item: score for (item, score, time, la, lo) in op_table[uss[0]]}
             for item, score in item_set.items():
                 if rec[u].keys().__contains__(item):
                     rec[u][item] += score * uss[1]
@@ -43,47 +35,63 @@ def recommend(op_table, sim_metrics, topn=None):
     # print(rec[0])
     return rec
 
-
-def async_test(thread_name, sim_mat, lock):
-    for i in range(10):
-        with lock:
-            print(str(thread_name) + ':' + str(i))
-            sim_mat[str(thread_name) + ':' + str(i)] = i
-            sleep(0.5)
-
 # 协同过滤主函数
 if __name__ == '__main__':
 
-    train_file = 'trainna-FoursquareCheckins.csv'
-    test_file = 'testna-FoursquareCheckins.csv'
-    topns = [5, 10, 15, 20]
-    topks = [1, 2, 3, 5, 7, 10, 15, 20]
+    # train_file = 'trainRF-SH-FoursquareCheckins.csv'
+    # test_file = 'testRF-SH-FoursquareCheckins.csv'
+    loc_center_file = ''
+    train_file = 'trainRF-NA-Gowalla_totalCheckins.txt'
+    test_file = 'testRF-NA-Gowalla_totalCheckins.txt'
+
+    topns = [100]
+    topks = [5,10,15]
 
     nprs = []
     nres = []
     nvas = []
     print('read_table')
-    table = read_checks_table(train_file, split_sig=',', uin=0, iin=4, timein=3, scorein=None, time_format='%Y-%m-%d %H:%M:%S')
-    test = read_checks_table(test_file, split_sig=',', uin=0, iin=4, timein=3, scorein=None, time_format='%Y-%m-%d %H:%M:%S')
+    table = read_checks_table(train_file, split_sig='\t', uin=0, iin=4, timein=1, scorein=None,
+                              time_format='%Y-%m-%dT%H:%M:%SZ')
+    test = read_checks_table(test_file, split_sig='\t', uin=0, iin=4, timein=1, scorein=None,
+                             time_format='%Y-%m-%dT%H:%M:%SZ')
+    # table = read_checks_table(train_file, split_sig=',', uin=0, iin=4, timein=3, scorein=None,
+    #                           time_format='%Y-%m-%d %H:%M:%S')
+    # test = read_checks_table(test_file, split_sig=',', uin=0, iin=4, timein=3, scorein=None,
+    #                          time_format='%Y-%m-%d %H:%M:%S')
     root_dir_name = 'mid_data/' + '-'.join(train_file.split('.')[:-1]) + '/'
 
     # ========= CosineSimilar ================
     sim_fun = CosineSimilar(table)
     sim_fun_name = sim_fun.name
 
+    # ========= CosineSimilar ================
+    # sim_fun = JaccardSimilar(table)
+    # sim_fun_name = sim_fun.name
+
     # # ========= SocialSimilar ================
-    # friend_dic = read_dic_set('FoursquareFriendship.csv', split_tag=',')
-    # sim_fun = SocialSimilar(friend_dic)
+    # friend_dic = read_dic_set('0.1-RF-NA-Gowalla_edges.txt', split_tag='\t')
+    # sim_fun = SocialSimilar(friend_dic, default_value=0)
+    # sim_fun_name = sim_fun.name
+
+
+    # # ========= SocialGroupSimilar ================
+    # friend_dic = read_dic_set('RF-NA-Gowalla_edges.txt', split_tag='\t')
+    # sim_fun = SocialGroupSimilar(friend_dic, 2)
     # sim_fun_name = sim_fun.name
 
     # ========= trust ===================
     # friend_dic = read_trust_dic('Gowalla_edges.txt')
-    # tc = TrustCalculator(friend_dic, max_depth=3, decay=0.8)
-    # sim_fun = lambda x, y: tc.sim(x, y)
+    # friend_dic = read_dic_set('RF-SH-FoursquareFriendship.csv', split_tag=',')
+    # tc = KatzCalculator(friend_dic, max_depth=1, decay=0.5)
+    # sim_fun = tc.sim
     # sim_fun_name = tc.name
 
     # ========== sq_base ================
-    # sim_fun = SequenceScore(table, delta=26*60*60)
+    #
+    # friend_dic = read_dic_set('klndGowalla_edges.txt', split_tag='\t')
+    # friend_dic = read_dic_set('RF-SH-FoursquareFriendship.csv', split_tag=',')
+    # sim_fun = SequenceScore(table, delta_day=5)
     # sim_fun_name = sim_fun.name
 
     dir_name = root_dir_name + sim_fun_name + '/'
@@ -98,19 +106,18 @@ if __name__ == '__main__':
     else:
         print('cal_sim_mat')
         sim_metrics = {}
-        process_num = 6
+        process_num = 4
         users = list(table.keys())
         users_map = [[] for i in range(process_num)]
         for user in table.keys():
-            users_map[int(user) % 6].append(user)
-        pool = multiprocessing.Pool(processes=process_num)
-        partial_cal_sim_mat_for_async = functools.partial(cal_sim_mat_for_async, users=users, similar_fun=sim_fun, reg_one=False, sort_change=True)
-        # partial_test = functools.partial(async_test)
-        # print(users_map[0])
-        # partial_cal_sim_mat_for_async(0, users_map[0])
+            users_map[int(user) % process_num].append(user)
+        pool = multiprocessing.Pool(processes=6)
+        partial_cal_sim_mat_for_async = functools.partial(cal_sim_mat_for_async, users=users, similar_fun=sim_fun,
+                                                          reg_one=True, sort_change=True)
+
         results = []
-        for i in range(6):
-            results.append(pool.apply_async(partial_cal_sim_mat_for_async, (i, users_map[i], )))
+        for i in range(process_num):
+            results.append(pool.apply_async(partial_cal_sim_mat_for_async, (i, users_map[i],)))
         pool.close()
         pool.join()
 
@@ -118,8 +125,9 @@ if __name__ == '__main__':
             sim_metrics.update(result.get())
         write_obj(sim_name, sim_metrics)
 
-    out_json_to_file('out_file.txt', sim_metrics)
 
+
+#13989
     for topn in topns:
         rec_name = dir_name + '-'.join(['rec', str(topn)]) + '.txt'
         ex_rec_name = dir_name + '-'.join(['ex_rec', str(topn)]) + '.txt'
@@ -129,7 +137,7 @@ if __name__ == '__main__':
         else:
             print('recommend')
             rec = recommend(table, sim_metrics, topn)
-            write_obj(rec_name, rec)
+            # write_obj(rec_name, rec)
             exclude_dup(table, rec)
             write_obj(ex_rec_name, rec)
 
@@ -156,9 +164,7 @@ if __name__ == '__main__':
     out_json_to_file(dir_name + 'nprs.txt', nprs)
     out_json_to_file(dir_name + 'nres.txt', nres)
     out_json_to_file(dir_name + 'nvas.txt', nvas)
-    out_json_to_file(dir_name + 'sim.json', sim_metrics)
 
     pprint(nprs)
     pprint(nres)
     pprint(nvas)
-

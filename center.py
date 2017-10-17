@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from numpy import *
 import numpy as np
 
-from rec_lib.utils import read_checks_table
+from rec_lib.utils import read_checks_table, sort_dict
 
 
 def cal_center(check_positions):
@@ -19,7 +19,7 @@ def cal_center(check_positions):
     plt.show()
 
 
-def press(event):
+def loc_pos_press(event):
     global i
     global loc_user_pos
     global loc_center
@@ -30,7 +30,7 @@ def press(event):
             i = 0
     else:
         i += 1
-        while len(loc_user_pos.get(locations[i])) < 15:
+        while len(table.get(locations[i])) < 15:
             i += 1
         print("next")
     fig = event.inaxes.figure
@@ -44,6 +44,48 @@ def press(event):
     fig.canvas.draw()
 
 
+def user_check_press(event):
+    global i
+    global location
+    global ls
+    table = location
+    users = ls
+
+    if event.inaxes == None:
+        if i > 0:
+            i -= 1
+        else:
+            i = 0
+    else:
+        i += 1
+        while len(table.get(users[i])) < 50:
+            i += 1
+        print("next")
+    plt.clf()
+    fig = event.inaxes.figure
+    ax1 = fig.add_subplot(121)
+
+    checks = mat(table.get(users[i])).T
+    print(checks)
+    ax1.scatter(checks[1], checks[0])
+    ax1.set_xlabel('latitude')
+    ax1.set_ylabel('longitude')
+
+    i += 1
+    while len(table.get(users[i])) < 50:
+        i += 1
+    print("next")
+    ax2 = fig.add_subplot(122)
+
+    checks = mat(table.get(users[i])).T
+    print(checks)
+    ax2.scatter(checks[1], checks[0])
+    ax2.set_xlabel('latitude')
+    ax2.set_ylabel('longitude')
+
+
+    fig.canvas.draw()
+
 def cal_center_average(check_points):
     checks = mat(check_points)
     checks = checks.T
@@ -51,7 +93,7 @@ def cal_center_average(check_points):
 
 
 def cal_center_split(checks_points):
-    print('all', checks_points)
+    # print('all', checks_points)
     if len(checks_points) == 1:
         return checks_points[0]
     check_t = mat(checks_points).T
@@ -140,41 +182,64 @@ def get_location_user_pos(location_users:dict, user_center:dict):
         for u in users:
             table[loc].append(user_center.get(u))
     return table
-
-# table = read_checks_pos('trainna-FoursquareCheckins.csv')
-# location = read_location_pos('../trainna-FoursquareCheckins.csv')
+#
+# table = read_checks_pos('trainRF-SH-FoursquareCheckins.csv', split_sig=',', lain=1, loin=2)
+# table = read_checks_pos('trainRF-NA-Gowalla_totalCheckins.txt', split_sig='\t', lain=2, loin=3)
+# location = read_location_pos('trainRF-SH-FoursquareCheckins.csv')
 
 #
 i = 0
 # users = list(table.keys())
 # ls = list(location.keys())
 
-user_center = read_user_center('trainna-FoursquareUserCenter.csv')
-location_users = read_location_users('trainna-FoursquareCheckins.csv')
-locations = list(location_users.keys())
-loc_user_pos = get_location_user_pos(location_users, user_center)
-loc_center = read_user_center('trainna-FoursquareLocationCenter.csv')
+# user_center = read_user_center('dataset/trainna-FoursquareUserCenter.csv')
+# location_users = read_location_users('trainna-FoursquareCheckins.csv')
+# locations = list(location_users.keys())
+# loc_user_pos = get_location_user_pos(location_users, user_center)
+# loc_center = read_user_center('trainna-FoursquareLocationCenter.csv')
 #
 # # pprint(loc_user_pos)
 # print(location_users.get('88153'))
 # print(user_center.get('8488'))
 # print(table.get('8488'))
 if __name__ == '__main__':
-    #
-    fig = plt.figure()
-    fig.canvas.mpl_connect('button_press_event', press)
-    ax1 = fig.add_subplot(111)
-    plt.show()
+
+    ## 查看位置签到的数据量
+    # location_users = read_location_users('../dataset_handler/na-FoursquareCheckins.csv')
+    # location_users = sorted(location_users.items(), key=lambda d:len(d[1]), reverse=True)
+    # loc = []
+    # for i in range(20):
+    #     loc.append(location_users[i][0])
+    #     print(i, location_users[i][0], len(location_users[i][1]))
+    # print(loc)
+    # fig = plt.figure()
+    # # fig.canvas.mpl_connect('button_press_event', user_check_press)
+    # ax1 = fig.add_subplot(111)
+    # user_center = mat([v for v in user_center.values()]).T
+    # ax1.scatter(user_center[1], user_center[0])
+    # print(user_center)
+    # plt.show()
+
+    # print(location['2506'])
     # points = [[a, b] for a in range(5) for b in range(5)]
     # cal_center(check_positions=points)
-    # global table
+
+    table = read_checks_pos('trainRF-NA-Gowalla_totalCheckins.txt', uin=0, lain=2, loin=3, split_sig='\t')
+    loc_t = read_checks_pos('trainRF-NA-Gowalla_totalCheckins.txt', uin=4, lain=2, loin=3, split_sig='\t')
     #
-    # with open('trainna-FoursquareUserCenter.csv', 'w') as f:
-    #     for user, checks in table.items():
-    #         center = cal_center_average(checks)
-    #         f.write(",".join([user, str(center[0]), str(center[1])]))
-    #         f.write('\n')
-    # with open('trainna-FoursquareLocationCenter.csv', 'w') as f:
+    with open('trainRF-NA-Gowalla_UserCenter.txt', 'w') as f:
+        for user, checks in table.items():
+            center = cal_center_split(checks)
+            f.write(",".join([user, str(center[0]), str(center[1])]))
+            f.write('\n')
+
+    with open('trainRF-NA-Gowalla_LocCenter.txt', 'w') as f:
+        for user, checks in loc_t.items():
+            center = cal_center_average(checks)
+            f.write(",".join([user, str(center[0]), str(center[1])]))
+            f.write('\n')
+
+    # with open('trainRF-SH-FoursquareLocationCenter.csv', 'w') as f:
     #     for item, checks in location.items():
     #         center = cal_center_average(checks)
     #         f.write(",".join([item, str(center[0]), str(center[1])]))
